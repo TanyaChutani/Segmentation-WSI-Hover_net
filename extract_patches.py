@@ -8,9 +8,9 @@ import glob
 import os
 import tqdm
 import pathlib
-
+import cv2
 import numpy as np
-
+import matplotlib.pyplot as plt
 from misc.patch_extractor import PatchExtractor
 from misc.utils import rm_n_mkdir
 
@@ -24,22 +24,22 @@ if __name__ == "__main__":
 
     win_size = [540, 540]
     step_size = [164, 164]
-    extract_type = "mirror"  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
+    extract_type = "valid"  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
 
     # Name of dataset - use Kumar, CPM17 or CoNSeP.
     # This used to get the specific dataset img and ann loading scheme from dataset.py
     dataset_name = "consep"
-    save_root = "dataset/training_data/%s/" % dataset_name
+    save_root = "/home/ubuntu/aira/%s/" % dataset_name
 
     # a dictionary to specify where the dataset path should be
     dataset_info = {
         "train": {
-            "img": (".png", "dataset/CoNSeP/Train/Images/"),
-            "ann": (".mat", "dataset/CoNSeP/Train/Labels/"),
+            "img": (".png", "/home/ubuntu/aira/Train_Image"),
+            "ann": (".png", "/home/ubuntu/aira/Train_Mask"),
         },
         "valid": {
-            "img": (".png", "dataset/CoNSeP/Test/Images/"),
-            "ann": (".mat", "dataset/CoNSeP/Test/Labels/"),
+            "img": (".png", "/home/ubuntu/aira/Valid_Image"),
+            "ann": (".png", "/home/ubuntu/aira/Valid_Mask"),
         },
     }
 
@@ -71,15 +71,14 @@ if __name__ == "__main__":
 
         for file_idx, file_path in enumerate(file_list):
             base_name = pathlib.Path(file_path).stem
-
             img = parser.load_img("%s/%s%s" % (img_dir, base_name, img_ext))
-            ann = parser.load_ann(
-                "%s/%s%s" % (ann_dir, base_name, ann_ext), type_classification
+            ann = parser.load_img(
+                "%s/%s%s" % (ann_dir, base_name, ann_ext)
             )
 
             # *
-            img = np.concatenate([img, ann], axis=-1)
-            sub_patches = xtractor.extract(img, extract_type)
+            #img = np.concatenate([img, ann], axis=-1)
+            sub_patches = xtractor.extract(ann, extract_type)
 
             pbar_format = "Extracting  : |{bar}| {n_fmt}/{total_fmt}[{elapsed}<{remaining},{rate_fmt}]"
             pbar = tqdm.tqdm(
@@ -91,9 +90,10 @@ if __name__ == "__main__":
             )
 
             for idx, patch in enumerate(sub_patches):
-                np.save("{0}/{1}_{2:03d}.npy".format(out_dir, base_name, idx), patch)
-                pbar.update()
-            pbar.close()
+                cv2.imwrite("{0}/{1}_{2:03d}.png".format(out_dir, base_name, idx),patch)
+                #np.save("{0}/{1}_{2:03d}.npy".format(out_dir, base_name, idx), patch)
+                #pbar.update()
+            #pbar.close()
             # *
 
             pbarx.update()

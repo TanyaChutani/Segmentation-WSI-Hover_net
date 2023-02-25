@@ -52,7 +52,7 @@ def get_config(nr_type, mode):
                         },
                         # path to load, -1 to auto load checkpoint from previous phase,
                         # None to start from scratch
-                        "pretrained": "../pretrained/ImageNet-ResNet50-Preact_pytorch.tar",
+                        "pretrained": "/home/ubuntu/aira/ImageNet-ResNet50-Preact_pytorch.tar",
                         # 'pretrained': None,
                     },
                 },
