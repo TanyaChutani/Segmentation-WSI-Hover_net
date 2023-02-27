@@ -146,7 +146,7 @@ if __name__ == '__main__':
         run_args['patch_input_shape'] = 256
         run_args['patch_output_shape'] = 164
     else:
-        run_args['patch_input_shape'] = 270
+        run_args['patch_input_shape'] = 540
         run_args['patch_output_shape'] = 80
 
     if sub_cmd == 'tile':

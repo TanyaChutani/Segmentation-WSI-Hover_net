@@ -22,7 +22,7 @@ def fix_mirror_padding(ann):
     """
     current_max_id = np.amax(ann)
     inst_list = list(np.unique(ann))
-    inst_list.remove(0)  # 0 is background
+    #inst_list.remove(0)  # 0 is background
     for inst_id in inst_list:
         inst_map = np.array(ann == inst_id, np.uint8)
         remapped_ids = measurements.label(inst_map)[0]

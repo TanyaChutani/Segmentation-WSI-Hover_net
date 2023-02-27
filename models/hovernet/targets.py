@@ -28,7 +28,7 @@ def gen_instance_hv_map(ann, crop_shape):
     orig_ann = ann.copy()  # instance ID map
     fixed_ann = fix_mirror_padding(orig_ann)
     # re-cropping with fixed instance id map
-    crop_ann = cropping_center(fixed_ann, crop_shape)
+    crop_ann = fixed_ann
     # TODO: deal with 1 label warning
     crop_ann = morph.remove_small_objects(crop_ann, min_size=30)
 
@@ -36,7 +36,7 @@ def gen_instance_hv_map(ann, crop_shape):
     y_map = np.zeros(orig_ann.shape[:2], dtype=np.float32)
 
     inst_list = list(np.unique(crop_ann))
-    inst_list.remove(0)  # 0 is background
+    #  inst_list.remove(0)  # 0 is background
     for inst_id in inst_list:
         inst_map = np.array(fixed_ann == inst_id, np.uint8)
         inst_box = get_bounding_box(inst_map)
@@ -57,8 +57,8 @@ def gen_instance_hv_map(ann, crop_shape):
         # instance center of mass, rounded to nearest pixel
         inst_com = list(measurements.center_of_mass(inst_map))
 
-        inst_com[0] = int(inst_com[0] + 0.5)
-        inst_com[1] = int(inst_com[1] + 0.5)
+        inst_com[0] = int(np.nan_to_num(inst_com[0]) + 0.5)
+        inst_com[1] = int(np.nan_to_num(inst_com[1]) + 0.5)
 
         inst_x_range = np.arange(1, inst_map.shape[1] + 1)
         inst_y_range = np.arange(1, inst_map.shape[0] + 1)

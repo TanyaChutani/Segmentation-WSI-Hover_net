@@ -75,11 +75,36 @@ class FileLoader(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         path = self.info_list[idx]
-        data = np.load(path)
+        image_path = path.replace("masks","images")
+        
+        mask = cv2.imread(path)
+        black = str([0, 0, 0])
+        yellow = str([255,  255, 0])
+        red = str([255,  0,   0])
 
+        labels = {black:0, yellow:2, red:1}
+
+        width = mask.shape[1]
+        height = mask.shape[0]
+        values = [str(list(mask[i,j])) for i in range(height) for j in range(width)]
+
+        mask = np.array(([0]*width*height))
+        
+        for i, value in enumerate(values):
+            mask[i]= labels[value]
+        ann = np.expand_dims(np.asarray(mask, dtype=np.float64).reshape(height,width), axis=-1)
+        mask = cv2.resize(ann, dsize=(80, 80),interpolation = cv2.INTER_CUBIC) 
+
+        '''
+        new_mask = np.zeros(mask.shape + (len(labels),))
+        for i in range(len(labels)):
+            new_mask[mask == i,i] = 1
+        
+        ann = np.array(new_mask, dtype=np.int32)
+        '''
         # split stacked channel into image and label
-        img = (data[..., :3]).astype("uint8")  # RGB images
-        ann = (data[..., 3:]).astype("int32")  # instance ID map and type map
+        img = cv2.imread(image_path)
+
 
         if self.shape_augs is not None:
             shape_augs = self.shape_augs.to_deterministic()

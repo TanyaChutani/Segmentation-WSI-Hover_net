@@ -23,8 +23,8 @@ if __name__ == "__main__":
     type_classification = True
 
     win_size = [540, 540]
-    step_size = [164, 164]
-    extract_type = "valid"  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
+    step_size = [256, 256]
+    extract_type = "mirror"  # Choose 'mirror' or 'valid'. 'mirror'- use padding at borders. 'valid'- only extract from valid regions.
 
     # Name of dataset - use Kumar, CPM17 or CoNSeP.
     # This used to get the specific dataset img and ann loading scheme from dataset.py

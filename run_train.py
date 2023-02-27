@@ -104,7 +104,9 @@ class TrainManager(Config):
         else:
             data_dir_list = self.valid_dir_list
         for dir_path in data_dir_list:
-            file_list.extend(glob.glob("%s/*.npy" % dir_path))
+            path = os.path.join(dir_path, "masks/*.png")
+            aa = glob.glob(path)
+            file_list.extend(aa)
         file_list.sort()  # to always ensure same input ordering
 
         assert len(file_list) > 0, (
