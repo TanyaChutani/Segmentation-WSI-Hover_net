@@ -204,3 +204,36 @@ tile \
 <p float="left">
   <img src="logs/val_dice.png" alt="Segmentation" width="870" />
 </p>
+
+## Quantitative Results
+<p float="left">
+  <img src="logs/val_acc_values.png" alt="Segmentation" width="870" />
+</p>
+<br />
+<br />
+<br />
+<p float="left">
+  <img src="logs/train_loss_values.png" alt="Segmentation" width="870" />
+</p>
+
+
+# Predictions with model
+<p float="left">
+  <img src="results/1.png" alt="Segmentation" width="870" />
+</p>
+
+# Predictions with model
+<p float="left">
+  <img src="results/2.png" alt="Segmentation" width="870" />
+</p>
+
+# Predictions with model
+<p float="left">
+  <img src="results/3.png" alt="Segmentation" width="870" />
+</p>
+
+# Predictions with model
+<p float="left">
+  <img src="results/4.png" alt="Segmentation" width="870" />
+</p>
+
