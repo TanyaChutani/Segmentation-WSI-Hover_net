@@ -1,32 +1,134 @@
-# HoVer-Net: Simultaneous Segmentation and Classification of Nuclei in Multi-Tissue Histology Images
+# Segmentation on WSI Images with Hover Net
 
-A multiple branch network that performs nuclear instance segmentation and classification within a single network. The network leverages the horizontal and vertical distances of nuclear pixels to their centres of mass to separate clustered cells. A dedicated up-sampling branch is used to classify the nuclear type for each segmented instance. <br />
+## Overview
+- About the data: Whole Sided Imagess<br />
+- Basics of segmentations<br />
+- Dataset<br />
+- Challenges<br />
+- Model<br />
+- Training and inference details<br />
+- Results on test dataset<br />
+- Looking forward<br />
 
-[Link](https://www.sciencedirect.com/science/article/abs/pii/S1361841519301045?via%3Dihub) to Medical Image Analysis paper. <br />
 
-This is the official PyTorch implementation of HoVer-Net. For the original TensorFlow version of this code, please refer to [this branch](https://github.com/vqdang/hover_net/tree/tensorflow-final). The repository can be used for training HoVer-Net and to process image tiles or whole-slide images. As part of this repository, we supply model weights trained on the following datasets:
+## About the data: Whole Sided Images
 
-- [CoNSeP](https://www.sciencedirect.com/science/article/pii/S1361841519301045)
-- [PanNuke](https://arxiv.org/abs/2003.10778)
-- [MoNuSAC](https://ieeexplore.ieee.org/abstract/document/8880654)
-- [Kumar](https://ieeexplore.ieee.org/abstract/document/7872382)
-- [CPM17](https://www.frontiersin.org/articles/10.3389/fbioe.2019.00053/full)
+Whole sided images, used in digital pathology, are high resolution digital files obtained by scanning a microscope slide, usually at varying magnifications. Often, these images are gigantic, which poses issues pertaining to memory and data processing, hence it is uncommon to practically fit the entire gigapixel image into the GPU. While we could down-sample the said image, which, while aiding the direct usage of a convolutional network and circumventing memory issues, would result in the loss of discriminative details, which is encoded in high resolution patches, thus resulting in suboptimal predictions.<br />
+<br />
+Moreover, while deep learning techniques have been widely adopted by numerous other fields, labeled data is harder to obtain in case of digital pathology, which limits the usage of supervised approaches. The data available for the purposes of digital pathology is often based on a small sample size and a limited geographic variance  among other factors, which limits the utility and leads to a subpar generalizing capacity of the deep learning model.
+Another common dilemma is in relation to the separation of clustered objects, which results from the lack of clear well-defined boundaries in case of objects in the image.<br />
+<br />
+Class imbalance is a problem often found in datasets concerning applications in the healthcare domain, wherein at least one of the target classes constitutes only a very small minority of the data samples. In other words, the class distribution is not even remotely balanced and is instead skewed. In the dataset made available to me for analysis and reporting, the class label 'red' was found to consist of fewer contours/objects when compared to the other two target labels.<br />
+<br />
 
-Links to the checkpoints can be found in the inference description below.
+## Basics of segmentations
 
-![](docs/diagram.png)
+The goal of segmentation is to predict class labels for each pixel in the image. Segmentation helps us understand what's in an image and also provides us with a granular understanding of the localized objects that may be present in the image. While the mechanisms for object detection entails drawing a bounding box to highlight the location of the objects, segmentation provides pixel by pixel outlines for each object.<br />
+<br />
+Moreover, since we are predicting target labels for each pixel of an image, segmentation is a form of a dense prediction problem.
+Training data for segmentation models involves the provision of images as inputs and masks, which detail the region of the said image where a specific class is present. The segmentation masks are composed of binary labels for each corresponding pixel and overlay a single channel of the target class, hence masks are generally shaped (image_width * image_height * num_classes).<br />
 
-## Set Up Environment
+## Dataset
+Our dataset consists of digitized H&E stained whole-slide images (WSI) of biopsies. The whole-slide images (WSI) made by digitizing microscope slides at diagnostic resolution are very large and H&E staining is a routine protocol to enhance the contrast of a tissue section and is commonly used for tumour assessment (grading, staging, etc.). <br />
+<br />
+In this dataset, we have 3 categories - black (0, 0, 0), yellow (255, 255, 0) and red(255, 0 , 0). <br />
 
-```
-conda env create -f environment.yml
-conda activate hovernet
-pip install torch==1.6.0 torchvision==0.7.0
-```
+#### Details:
+- Train: 5 Images<br />
+- Validation: 2 Images<br />
+As mentioned above, WSI has very high resolution and in this dataset, they are available in 10k*14k*3  - where 14k is the height, 10k is the width and 3 are number of channels (R, G, B) in the image. <br />
 
-Above, we install PyTorch version 1.6 with CUDA 10.2. 
+#### Patching
 
-## Repository Structure
+Total images after patching:
+
+- Train: 6013
+
+#### Sample patch with mask
+
+<p float="left">
+  <img src="assets/sample_image_patch.png" alt="Segmentation" width="870" />
+</p>
+
+### Data Augmentation 
+Data augmentation is the process of applying random transformations to the data before feeding it to the network. This introduces some noise and can help improve model performance by reducing overfitting. <br />
+For instance, each image can be randomly rotated by 90 degrees - the idea is that this would force the network to learn representations which are robust to rotation.<br />
+
+
+## Challenges 
+Automated WSI image analysis is plagued by a myriad of challenges. Some of them are listed below:
+- Very cost intensive and hard to annotate WSI images.
+- Large dimensionality of WSI images - A WSI image is obtained by digitizing a glass slide at a very high resolution on a microscope. A typical glass-slide of size 10 mm*15 mm results in gigapixel image of size 10,000 * 150,000 pixels. 
+- Insufficient training samples -  The primary factor to the development and clinical implementation of deep learning algorithms consist of sufficiently large and curated however the WSI data is often based on small sample sizes with limited geographic variety, resulting in algorithms with limited utility and poor generalization.
+- Separating clustered objects - It’s one of the major issue in the medical domain as most of the images have objects which share boundary with each other.
+- Class imbalance - Like all other datasets, here in our dataset I have seen the problem of unbalanced dataset. The red class has very less contours/objects as compared to other two classes. <br />
+
+## Model
+We can broadly divide image segmentation techniques into two types. Consider the below images:
+- Semantic segmentation outputs the uncountable objects in an image. It analyzes each image pixel and assigns a unique class label based on the texture it represents. For instance, an image contains two cars and three pedestrians. The two cars represent the same texture as do the three pedestrians. Commonly used semantic segmentation models include DeepLab V3 plus, U-Net, DeconvNet, and FCNs. Semantic segmentation normally employs the Intersection over Union metric - which checks the similarity between the predicted and ground truth masks. <br />
+- Instance segmentation typically deals with tasks related to countable objects. It can detect each instance of a class present in an image and assigns it a different mask with a unique identifier. Commonly used instance segmentation techniques are Mask R-CNN, PANet, and YOLACT. The AP is used as a metric for instance segmentation, it uses the IoU on a pixel-to-pixel basis for each object instance.
+
+<p float="left">
+  <img src="assets/types_of_segmentation.jpg" alt="Segmentation" width="870" />
+</p>
+
+## HoverNet 
+This model was developed in late 2018 mainly for nuclear segmentation and classification and addresses issues faced by microscopic images such as there are several different types of nuclei, some of them exhibiting large intra-class variability such as the nuclei of tumour cells. In addition to it, some of the nuclei are often clustered together. <br />
+Hovernet leverages the instance-rich information encoded within the vertical and horizontal distances of nuclear pixels to their centres of mass. These distances are then utilised to separate clustered nuclei, resulting in an accurate segmentation, particularly in areas with overlapping instances.<br />
+
+#### Data Loader 
+A data loader class is used to iterate through the data, returning a tuple with the batch and performs various data augmentations before passing the same through a deep neural network.<br />
+
+#### Architecture
+The network architecture of Hover-Net comprises of Encoder-Decoder architecture. The input image size of the network is 270x270x3 where 270 is the height/width of the input patch with 3 being RGB channels of input Images. <br />
+##### Encoder Block
+The purpose of the encoder in a model is to perform feature extraction on the input image. As we go through the encoder block, just like a multiple layers of CNN the spatial resolution of feature maps decreases and the depth of the feature maps increases.<br />
+Encoder block of Hover-Net is as follows:
+- The first layer comprises of convolution Layer having a filter size of 7x7 to have a large field of view followed by batch normalization and ReLU as an activation function at the end.
+- Post this, ResNet 50 which consists of 4 Residual Blocks having layers ranging from 3 to 6.
+-	The last layer of the encoder comprises of 1x1 convolution layer that is mostly used to reduce the depth of the feature map in a neural network.<br />
+
+
+##### Decoder Block
+The objective of using a decoder block is to upsample the features extracted from the encoder block. There are three heads in the decoder which are Nuclear Pixel (Binary segmentation mask of Nuclei), HoVer Branch (generation of horizontal and vertical feature maps) which are used for detection of overlapping nuclei, Nuclear Classification (assigns class label to segmented nuclei).<br />
+Decoder block of Hover-Net is as follows:
+-	Upsample layer increases the size of the feature map by a factor of 2.
+- The 1x1 convolution layer is used to reduce the depth of the upsampled feature maps.
+
+<p float="left">
+  <img src="assets/hovernet_architecture.png" alt="Segmentation" width="870" />
+</p>
+
+#### Loss function
+A loss function lets know the model of its inability to fit the data, with idea being to converge on an optimum set of parameters.
+Hover-Net Loss function consists of 3 terms: HoVer head (Horizontal and Vertical Feature Maps), Nuclear Pixel head (NP), and Nuclear Classification head (NC). <br />
+There are two components in hover branch loss function term - La mean squared error between the predicted horizontal and vertical distances and the ground truth. Lb is the mean squared error between the horizontal and vertical gradients of the horizontal and vertical maps respectively and the corresponding gradients of the ground truth.<br />
+NP and NC branches, we calculate the cross-entropy loss (Lc and Le) and the dice loss (Ld and Lf ). These two losses are then combined together to give the overall loss of each branch.<br />
+
+<p float="left">
+  <img src="assets/loss_hovernet.jpg" alt="Segmentation" width="870" />
+</p>
+
+#### Splitting into training and testing data : 
+The issue may then be that the model "overfits" the training data and may fail when generalizing to a different subset. So we need for separate training, validation and testing steps which help combat overfitting and data leakage. They help us have the idea of how well our model does on unseen data. In an effort to increase model's performance on validation data, we can tune training hyperparameters, model architecture and make use of data augmentation techniques.<br />
+
+#### Metric
+
+Hovernet uses Dice coefficient - a statistical method which measures the similarity between two sets of data. <br />
+The mathematical equation for Dice coefficient is as follows:<br />
+2 * |X ∩ Y| / (|X| + |Y|)<br />
+<br />
+Where X is ground truth object and Y is the predicted object by HoverNet.
+<br />
+
+#### Hyper-Parameters
+-	Image Size 270x270 and output size is 80*80
+-	50 Epochs Training Using Pre-Trained Weights of Resnet 50
+-	Adam Optimizer with Learning Rate 0.0001
+-	Reduction of Learning Rate to 0.00001 after 25 Epochs
+-	Batch_size used while training - 8
+
+#### Repository Structure
 
 Below are the main directories in the repository: 
 
@@ -47,226 +149,58 @@ Below are the main executable scripts in the repository:
 - `run_infer.py`: main inference script for tile and WSI processing
 - `convert_chkpt_tf2pytorch`: convert tensorflow `.npz` model trained in original repository to pytorch supported `.tar` format.
 
-# Running the Code
+## Running the Code
 
-## Training
+#### Training
+The training on the model is done by the run_train.py. parameters of note, include:
 
-### Data Format
-For training, patches must be extracted using `extract_patches.py`. For instance segmentation, patches are stored as a 4 dimensional numpy array with channels [RGB, inst]. Here, inst is the instance segmentation ground truth. I.e pixels range from 0 to N, where 0 is background and N is the number of nuclear instances for that particular image. 
+- --epochs: Number of times the training and validation steps are accomplished by forward and backward passes through network to reach a state of mininma on loss function.
+- --batch: Size of the batch which is passed through model on training and validation for steps across the network.
+- --img: Image size of the training images. Upon experimentation with this parameter, 270 was chosen to be a good parameter value.
+- Multi GPU training was enabled by wraping model object with torch.nn.DataParallel
 
-For simultaneous instance segmentation and classification, patches are stored as a 5 dimensional numpy array with channels [RGB, inst, type]. Here, type is the ground truth of the nuclear type. I.e every pixel ranges from 0-K, where 0 is background and K is the number of classes.
-
-Before training:
-
-- Set path to the data directories in `config.py`
-- Set path where checkpoints will be saved  in `config.py`
-- Set path to pretrained Preact-ResNet50 weights in `models/hovernet/opt.py`. Download the weights [here](https://drive.google.com/file/d/1KntZge40tAHgyXmHYVqZZ5d2p_4Qr2l5/view?usp=sharing).
-- Modify hyperparameters, including number of epochs and learning rate in `models/hovernet/opt.py`.
-
-### Usage and Options
  
 Usage: <br />
 ```
-  python run_train.py [--gpu=<id>] [--view=<dset>]
-  python run_train.py (-h | --help)
-  python run_train.py --version
+ nohup python run_train.py [--gpu=<id>] [--view=<dset>]
 ```
 
-Options:
+#### Inference
+
+In the final step, we should be able to detect objects on unseen images and label them into respective categories (segmentation+classification), which is accomplished by running the command run_infer.py. It has the following arguments most commonly used as per their usage in the model:<br />
+- --input_dir: Path to the test image
+- --model_path: Path to saved weights
+- --img: Size of the test image
+- --draw_dot: predicted segmentation drawn on the localized object in the image 
+
 ```
-  -h --help       Show this string.
-  --version       Show version.
-  --gpu=<id>      Comma separated GPU list.  
-  --view=<dset>   Visualise images after augmentation. Choose 'train' or 'valid'.
-```
-
-Examples:
-
-To visualise the training dataset as a sanity check before training use:
-```
-python run_train.py --view='train'
-```
-
-To initialise the training script with GPUs 0 and 1, the command is:
-```
-python run_train.py --gpu='0,1' 
-```
-
-## Inference
-
-### Data Format
-Input: <br />
-- Standard images files, including `png`, `jpg` and `tiff`.
-- WSIs supported by [OpenSlide](https://openslide.org/), including `svs`, `tif`, `ndpi` and `mrxs`.
-
-Output: <br />
-- Both image tiles and whole-slide images output a `json` file with keys:
-    - 'bbox': bounding box coordinates for each nucleus
-    - 'centroid': centroid coordinates for each nucleus
-    - 'contour': contour coordinates for each nucleus 
-    - 'type_prob': per class probabilities for each nucleus (default configuration doesn't output this)
-    - 'type': prediction of category for each nucleus
-- Image tiles output a `mat` file, with keys:
-    - 'raw': raw output of network (default configuration doesn't output this)
-    - 'inst_map': instance map containing values from 0 to N, where N is the number of nuclei
-    - 'inst_type': list of length N containing predictions for each nucleus
- - Image tiles output a `png` overlay of nuclear boundaries on top of original RGB image
-  
-### Model Weights
-
-Model weights obtained from training HoVer-Net as a result of the above instructions can be supplied to process input images / WSIs. Alternatively, any of the below pre-trained model weights can be used to process the data. These checkpoints were initially trained using TensorFlow and were converted using `convert_chkpt_tf2pytorch.py`. Provided checkpoints either are either trained for segmentation alone or for simultaneous segmentation and classification. Note, we do not provide a segmentation and classification model for CPM17 and Kumar because classification labels aren't available.
-
-**IMPORTANT:** CoNSeP, Kumar and CPM17 checkpoints use the original model mode, whereas PanNuke and MoNuSAC use the fast model mode. Refer to the inference instructions below for more information. 
-
-Segmentation and Classification:
-- [CoNSeP checkpoint](https://drive.google.com/file/d/1FtoTDDnuZShZmQujjaFSLVJLD5sAh2_P/view?usp=sharing)
-- [PanNuke checkpoint](https://drive.google.com/file/d/1SbSArI3KOOWHxRlxnjchO7_MbWzB4lNR/view?usp=sharing)
-- [MoNuSAC checkpoint](https://drive.google.com/file/d/13qkxDqv7CUqxN-l5CpeFVmc24mDw6CeV/view?usp=sharing)
-
-Segmentation Only:
-- [CoNSeP checkpoint](https://drive.google.com/file/d/1BF0GIgNGYpfyqEyU0jMsA6MqcUpVQx0b/view?usp=sharing)
-- [Kumar checkpoint](https://drive.google.com/file/d/1NUnO4oQRGL-b0fyzlT8LKZzo6KJD0_6X/view?usp=sharing) 
-- [CPM17 checkpoint](https://drive.google.com/file/d/1lR7yJbEwnF6qP8zu4lrmRPukylw9g-Ms/view?usp=sharing) 
-
-Access the entire checkpoint directory, along with a README on the filename description [here](https://drive.google.com/drive/folders/17IBOqdImvZ7Phe0ZdC5U1vwPFJFkttWp?usp=sharing).
-
-If any of the above checkpoints are used, please ensure to cite the corresponding paper.
-
-### Usage and Options
-
-Usage: <br />
-```
-  run_infer.py [options] [--help] <command> [<args>...]
-  run_infer.py --version
-  run_infer.py (-h | --help)
+nohup python run_infer.py \
+--nr_types=3 \
+--type_info_path=/home/ubuntu/aira/hover_net/type_info.json \
+--batch_size=8 \
+--model_mode=original \
+--model_path=/home/ubuntu/aira/hover_net/logs/00/net_epoch=33.tar \
+tile \
+--input_dir=/home/ubuntu/aira/consep/consep/valid/images \
+--output_dir=/home/ubuntu/aira/consep/consep/valid/pred/ \
+--draw_dot \
 ```
 
-Options:
-```
-  -h --help                   Show this string.
-  --version                   Show version.
-
-  --gpu=<id>                  GPU list. [default: 0]
-  --nr_types=<n>              Number of nuclei types to predict. [default: 0]
-  --type_info_path=<path>     Path to a json define mapping between type id, type name, 
-                              and expected overlay color. [default: '']
-
-  --model_path=<path>         Path to saved checkpoint.
-  --model_mode=<mode>         Original HoVer-Net or the reduced version used in PanNuke / MoNuSAC, 'original' or 'fast'. [default: fast]
-  --nr_inference_workers=<n>  Number of workers during inference. [default: 8]
-  --nr_post_proc_workers=<n>  Number of workers during post-processing. [default: 16]
-  --batch_size=<n>            Batch size. [default: 128]
-```
-
-Tile Processing Options: <br />
-```
-   --input_dir=<path>     Path to input data directory. Assumes the files are not nested within directory.
-   --output_dir=<path>    Path to output directory..
-
-   --draw_dot             To draw nuclei centroid on overlay. [default: False]
-   --save_qupath          To optionally output QuPath v0.2.3 compatible format. [default: False]
-   --save_raw_map         To save raw prediction or not. [default: False]
-```
-
-WSI Processing Options: <br />
-```
-    --input_dir=<path>      Path to input data directory. Assumes the files are not nested within directory.
-    --output_dir=<path>     Path to output directory.
-    --cache_path=<path>     Path for cache. Should be placed on SSD with at least 100GB. [default: cache]
-    --mask_dir=<path>       Path to directory containing tissue masks. 
-                            Should have the same name as corresponding WSIs. [default: '']
-
-    --proc_mag=<n>          Magnification level (objective power) used for WSI processing. [default: 40]
-    --ambiguous_size=<int>  Define ambiguous region along tiling grid to perform re-post processing. [default: 128]
-    --chunk_shape=<n>       Shape of chunk for processing. [default: 10000]
-    --tile_shape=<n>        Shape of tiles for processing. [default: 2048]
-    --save_thumb            To save thumb. [default: False]
-    --save_mask             To save mask. [default: False]
-```
-
-The above command can be used from the command line or via an executable script. We supply two example executable scripts: one for tile processing and one for WSI processing. To run the scripts, first make them executable by using `chmod +x run_tile.sh` and `chmod +x run_tile.sh`. Then run by using `./run_tile.sh` and `./run_wsi.sh`.
-
-Intermediate results are stored in cache. Therefore ensure that the specified cache location has enough space! Preferably ensure that the cache location is SSD.
-
-Note, it is important to select the correct model mode when running inference. 'original' model mode refers to the method described in the original medical image analysis paper with a 270x270 patch input and 80x80 patch output. 'fast' model mode uses a 256x256 patch input and 164x164 patch output. Model checkpoints trained on Kumar, CPM17 and CoNSeP are from our original publication and therefore the 'original' mode **must** be used. For PanNuke and MoNuSAC, the 'fast' mode **must** be selected. The model mode for each checkpoint that we provide is given in the filename. Also, if using a model trained only for segmentation, `nr_types` must be set to 0.
-
-`type_info.json` is used to specify what RGB colours are used in the overlay. Make sure to modify this for different datasets and if you would like to generally control overlay boundary colours.
-
-As part of our tile processing implementation, we add an option to save the output in a form compatible with QuPath. 
-
-Take a look on how to utilise the output in `examples/usage.ipynb`. 
-
-## Overlaid Segmentation and Classification Prediction
+## Quantitative Results
 
 <p float="left">
-  <img src="docs/seg.gif" alt="Segmentation" width="870" />
+  <img src="logs/train_logs.png" alt="Segmentation" width="870" />
 </p>
 
-Overlaid results of HoVer-Net trained on the CoNSeP dataset. The colour of the nuclear boundary denotes the type of nucleus. <br />
-Blue: epithelial<br />
-Red: inflammatory <br />
-Green: spindle-shaped <br />
-Cyan: miscellaneous
-
-## Datasets
-
-Download the CoNSeP dataset as used in our paper from [this link](https://warwick.ac.uk/fac/cross_fac/tia/data/hovernet/). <br />
-Download the Kumar, CPM-15, CPM-17 and TNBC datsets from [this link](https://drive.google.com/open?id=1l55cv3DuY-f7-JotDN7N5nbNnjbLWchK).  <br />
-Down
-
-Ground truth files are in `.mat` format, refer to the README included with the datasets for further information. 
-
-## Comparison to Original TensorFlow Implementation
-
-Below we report the difference in segmentation results trained using this repository (PyTorch) and the results reported in the original manuscript (TensorFlow). 
-
-Segmentation results on the Kumar dataset:
-| Platform   | DICE       | PQ         | AJI       |
-| -----------|----------- | -----------|-----------|
-| TensorFlow | 0.8258     | 0.5971     | 0.6412    |
-| PyTorch    | 0.8211     | 0.5904     | 0.6321    |
-
-Segmentation results on CoNSeP dataset: 
-| Platform   | DICE       | PQ         | AJI       |
-| -----------|----------- | -----------|-----------|
-| TensorFlow | 0.8525     | 0.5477     | 0.5995    |
-| PyTorch    | 0.8504     | 0.5464     | 0.6009    |
-
-Checkpoints to reproduce the above results can be found [here](https://drive.google.com/drive/folders/17IBOqdImvZ7Phe0ZdC5U1vwPFJFkttWp?usp=sharing).
-
-Simultaneous Segmentation and Classification results on CoNSeP dataset: 
-| Platform   | F1<sub>d</sub> | F1<sub>e</sub> | F1<sub>i</sub> | F1<sub>s</sub> | F1<sub>m</sub> |
-| -----------|----------------| ---------------|----------------|----------------|----------------|
-| TensorFlow | 0.748          | 0.635          | 0.631          | 0.566          | 0.426          |
-| PyTorch    | 0.756          | 0.636          | 0.559          | 0.557          | 0.348          |
-
-
-## Citation
-
-If any part of this code is used, please give appropriate citation to our paper. <br />
-
-BibTex entry: <br />
-```
-@article{graham2019hover,
-  title={Hover-net: Simultaneous segmentation and classification of nuclei in multi-tissue histology images},
-  author={Graham, Simon and Vu, Quoc Dang and Raza, Shan E Ahmed and Azam, Ayesha and Tsang, Yee Wah and Kwak, Jin Tae and Rajpoot, Nasir},
-  journal={Medical Image Analysis},
-  pages={101563},
-  year={2019},
-  publisher={Elsevier}
-}
-```
-
-## Authors
-
-* [Quoc Dang Vu](https://github.com/vqdang)
-* [Simon Graham](https://github.com/simongraham)
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
-
-Note that the PanNuke dataset is licensed under [Attribution-NonCommercial-ShareAlike 4.0 International](http://creativecommons.org/licenses/by-nc-sa/4.0/), therefore the derived weights for HoVer-Net are also shared under the same license. Please consider the implications of using the weights under this license on your work and it's licensing. 
-
-
-
+<p float="left">
+  <img src="logs/train_bce.png" alt="Segmentation" width="870" />
+</p>
+<p float="left">
+  <img src="logs/train_dice.png" alt="Segmentation" width="870" />
+</p>
+<p float="left">
+  <img src="logs/train_hv.png" alt="Segmentation" width="870" />
+</p>
+<p float="left">
+  <img src="logs/val_dice.png" alt="Segmentation" width="870" />
+</p>
