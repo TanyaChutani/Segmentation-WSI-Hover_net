@@ -40,7 +40,18 @@ As mentioned above, WSI has very high resolution and in this dataset, they are a
 
 #### Patching
 
-When tiling, each image is divided into a grid of tiles. Adjacent tiles overlap with each other in width and height dimensions. The tiles are cropped from the original as shown in the following image.
+As indicated earlier, we cannot fit an entire Whole Slide Image into the GPU memory at once for processing. As a workaround to this problem, we sample a subset of patches from the image. In other words, the entire WSI is divided into small patches. The quantity and size of patches are thus chosen so as to be sufficiently small enough to be fit in the GPU. Subsequent training is done on a patch level, and the ensuing label for the WSI is computed after aggregating the patch level predictions. <br />
+<br />
+When we are dealing with dense prediction tasks such as segmentation, an overlap is often incorporated into the patch generation process. Patch overlap is necessitated by the fact that we get poor results at the borders of patches. While overlap may result in more patches, thus slowing the processing of the entire image, it is often found to improve model performance and enhance intra-patch communication. This can also be understood as a form of data augmentation, wherein we increase the number of training patches created from a single region.<br />
+<br />
+The extraction of patches concerns the following:
+- kernel size: determines the dimensions for each individual patch. Thus, simply put, it is the number of pixels per extracted patch.
+- step size: the number of pixels between two consecutive patches in the WSI.<br />
+
+In our case, for an input image of dimensions (14k, 12k), the choice of the aforementioned parameters was kernel/patch size: (540, 540) and step size: (256, 256).<br />
+
+Aggregation of patches to predict the final class label is done on patch predictions (for instance, a majority vote) or patch features. Calculating max/mean pooling values, a weighted sum or identification of the most informative patches are some ways to aggregate features for patch level encodings. Local segmentation masks are individually computed for each of the patches extracted from the WSI, and aggregated to obtain the final segmentation mask.<br />
+<br />
 Total images after patching:
 
 - Train: 6013
@@ -52,9 +63,39 @@ Total images after patching:
 </p>
 
 ### Data Augmentation 
-Data augmentation is the process of applying random transformations to the data before feeding it to the network. This introduces some noise and can help improve model performance by reducing overfitting. <br />
-For instance, each image can be randomly rotated by 90 degrees - the idea is that this would force the network to learn representations which are robust to rotation.<br />
 
+Image augmentation techniques were found to be critical to the performance of the model. Due to the limitations in the availability and the relative expense of annotation of data pertaining to the healthcare domain, it is of utmost importance to artificially generate more training data using augmentation. Also, with the number of training samples made available being insufficient, there is the possibility of overfitting, wherein the model memorizes the training samples so much that it excels, while performing poorly on unseen test data. Augmentation reduces the prospect of overfitting, while increasing diversity of the training samples.<br />
+Creating variance in the input images enables the generation of new training samples which helps the model generalize and learn from a wider range of situations.<br />
+<br />
+
+- Blur: Blurring an image refers to mixing the values of neighboring pixels, based on some criterion. Thus, blur can be thought of as loss of detail and is determined by the number of neighboring pixels included in the computation across channels. When calculating blur, we take the standard deviation across image channels, with a larger standard deviation implying more blur.<br />
+Gaussian Blur implies computation of the average of values in a pixel neighborhood, based on the relative distance to an individual reference pixel. It is a linear operation and the choice of the smoothing parameter determines the preservation of local features.<br />
+<br />
+Median Blur, unlike Gaussian Blur, is a non-linear operation and involves the computation of the median of the values in the kernel. Also, while Gaussian Blur involves the computation of an artificial value (which may not be present in the original image), the output of Median Blur always refers to some value in the original image.<br />
+
+
+- Contrast: It implies the variance in the pixel values, and its usage helps us define boundaries in a better manner and highlight subtle differences in pixel values. In case of segmentation, inclusion of contrast as an augmentation technique leads to better generalization as we are able to clearly differentiate the brighter and darker pixels.
+
+- Brightness: It helps us simulate various lighting conditions. Brightness implies the application of a uniform increment or decrement to all pixels in an image. For instance, for the choice of brightness parameter B, the strength of all pixels in the image is +/- the value B.
+
+- Saturation: Definitive of the vibrancy in colors, saturation causes pixels to appear sharper. Less saturation implies faded color schemes (or a grayscale image in an extreme case), while an increase implies a colorful image.
+
+- Hue: It is representative of the color being displayed, and while altering brightness does not change the color (just the intensity), altering hue modifies the color. Usage of hue as an augmentation technique helps generalize the model as it forces the model to consider alternative colors for objects in an image.<br />
+
+<br />
+Range of magnitudes for the application of each of the aforementioned transformation was chosen to be:
+
+- Blur<br />
+- Gaussian Blur: Size of the Gaussian kernel= (3, 3) and standard deviation is automatically computed using kernel size.<br />
+- Median Blur: Size of the kernel to be used for computation of imputed median: (3, 3)
+
+- Brightness: Chosen from a uniformly distributed random variable with the range (-26, 26)
+
+- Contrast: Value for contrast was sampled using a random uniform distribution with range (0.75, 1.25)
+
+- Saturation: Value generated using a random uniform distribution; range= (-0.2, 0.2)
+
+- Hue: Sampled from a uniformly distributed random variable with the range (-8, 8)
 
 ## Challenges 
 Automated WSI image analysis is plagued by a myriad of challenges. Some of them are listed below:
