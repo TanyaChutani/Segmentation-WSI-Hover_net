@@ -222,18 +222,18 @@ tile \
 
 ## Predictions with model
 <p float="left">
-  <img src="results/1.png" alt="Segmentation" width="870" />
+  <img src="result/1.png" alt="Segmentation" width="870" />
 </p>
 
 <p float="left">
-  <img src="results/2.png" alt="Segmentation" width="870" />
+  <img src="result/2.png" alt="Segmentation" width="870" />
 </p>
 
 <p float="left">
-  <img src="results/3.png" alt="Segmentation" width="870" />
+  <img src="result/3.png" alt="Segmentation" width="870" />
 </p>
 
 <p float="left">
-  <img src="results/4.png" alt="Segmentation" width="870" />
+  <img src="result/4.png" alt="Segmentation" width="870" />
 </p>
 
