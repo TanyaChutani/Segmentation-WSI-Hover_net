@@ -217,22 +217,19 @@ tile \
 </p>
 
 
-# Predictions with model
+## Predictions with model
 <p float="left">
   <img src="results/1.png" alt="Segmentation" width="870" />
 </p>
 
-# Predictions with model
 <p float="left">
   <img src="results/2.png" alt="Segmentation" width="870" />
 </p>
 
-# Predictions with model
 <p float="left">
   <img src="results/3.png" alt="Segmentation" width="870" />
 </p>
 
-# Predictions with model
 <p float="left">
   <img src="results/4.png" alt="Segmentation" width="870" />
 </p>
