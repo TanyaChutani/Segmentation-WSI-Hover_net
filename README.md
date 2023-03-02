@@ -40,6 +40,7 @@ As mentioned above, WSI has very high resolution and in this dataset, they are a
 
 #### Patching
 
+When tiling, each image is divided into a grid of tiles. Adjacent tiles overlap with each other in width and height dimensions. The tiles are cropped from the original as shown in the following image.
 Total images after patching:
 
 - Train: 6013
@@ -158,7 +159,7 @@ The training on the model is done by the run_train.py. parameters of note, inclu
 - --batch: Size of the batch which is passed through model on training and validation for steps across the network.
 - --img: Image size of the training images. Upon experimentation with this parameter, 270 was chosen to be a good parameter value.
 - Multi GPU training was enabled by wraping model object with torch.nn.DataParallel
-
+- GPU used for training : `Tesla V100`
  
 Usage: <br />
 ```
@@ -185,6 +186,8 @@ tile \
 --output_dir=/home/ubuntu/aira/consep/consep/valid/pred/ \
 --draw_dot \
 ```
+#### Model weights
+[model-weights](https://drive.google.com/file/d/1vQgqDd_UXwWdnJVDx0ErMvW7K5uVx0Ig/view?usp=share_link)
 
 ## Quantitative Results
 
